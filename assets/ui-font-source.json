@@ -1,0 +1,25 @@
+{
+  "schema": 1,
+  "family": "Monocraft",
+  "style": "Regular",
+  "license": "OFL-1.1",
+  "repository": "https://github.com/IdreesInc/Monocraft",
+  "upstream_repository": "https://github.com/IdreesInc/Monocraft",
+  "commit": "e498bf70aeb25b4bdcff1e44d878fb2cb4f7c2a9",
+  "artifact_policy": "local-source-cache",
+  "rasterization": {
+    "pixel_height": 18,
+    "atlas_side": 1024,
+    "replacement_codepoint": 65533,
+    "proportional_advance_gap_px": 2,
+    "blank_advance_px": 8
+  },
+  "font_file": "Monocraft.ttf",
+  "font_url": "https://raw.githubusercontent.com/IdreesInc/Monocraft/e498bf70aeb25b4bdcff1e44d878fb2cb4f7c2a9/dist/Monocraft-ttf/Monocraft.ttf",
+  "font_size_bytes": 210192,
+  "font_sha256": "262e31822e0a75be567b02320bfa092143d871e8a273e529d1c5ab0c04cd215f",
+  "license_file": "LICENSE",
+  "license_url": "https://raw.githubusercontent.com/IdreesInc/Monocraft/e498bf70aeb25b4bdcff1e44d878fb2cb4f7c2a9/LICENSE",
+  "license_size_bytes": 4377,
+  "license_sha256": "f69c147003e052dbc9d96c40a9f73647e72766cfda95a597b94ed827fe25acb1"
+}

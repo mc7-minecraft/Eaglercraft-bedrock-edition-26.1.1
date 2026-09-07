@@ -1,0 +1,35 @@
+[package]
+name = "protocol"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish = false
+
+[dependencies]
+anyhow.workspace = true
+bridge = { path = "../bridge" }
+bytes.workspace = true
+futures.workspace = true
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+thiserror.workspace = true
+tokio = { workspace = true, features = ["time"] }
+uuid.workspace = true
+xxhash-rust = { version = "0.8.15", features = ["xxh64"] }
+# Wire format comes from bedrock_1_26_40 (Endstone-derived, wire-only). The
+# content registries (biomes/blocks/items/states/entities) have no 1.26.40
+# equivalent, so bedrock_1_26_30 stays enabled purely as the registry-data
+# source. The two version modules are additive and compile side by side.
+valentine = { path = "vendor/valentine", default-features = false, features = ["bedrock_1_26_40", "bedrock_1_26_30"] }
+jolyne = { path = "vendor/jolyne", default-features = false, features = ["client", "bedrock_1_26_40"] }
+
+[dev-dependencies]
+aes = "0.8"
+base64 = "0.22"
+ctr = "0.9"
+flate2 = "1"
+jsonwebtoken = "9.3"
+p384 = { version = "0.13", features = ["ecdh", "pkcs8"] }
+snap = "1.1"
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "time"] }
