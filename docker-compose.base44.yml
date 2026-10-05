@@ -1,0 +1,96 @@
+# Base44 development stack for Cinnabar (Rust Bedrock client + Go core).
+#
+# Cinnabar is a native desktop application (Bevy/wgpu + a Go networking core),
+# not a web app, so the preview is produced by rendering the real client on a
+# virtual X display inside the sandbox and bridging that display to the browser
+# over VNC/WebSocket on port 3000. The client, the asset pipeline and the Go
+# core all build from the bind-mounted working tree, so edits are live.
+name: cinnabar
+
+x-app: &app
+  build:
+    context: .
+    dockerfile: .base44/Dockerfile
+  image: cinnabar-base44:dev
+  working_dir: /work
+  volumes:
+    - .:/work
+    # Keep the repository clean: dependency and build caches live in volumes.
+    - cinnabar-cargo-registry:/usr/local/cargo
+    - cinnabar-target:/work/target
+    - cinnabar-go:/usr/local/gopath
+  environment: &app-env
+    CARGO_TERM_COLOR: never
+    CARGO_NET_RETRY: "5"
+    GOPATH: /usr/local/gopath
+
+services:
+  # One-shot: acquires the pinned asset inputs and compiles every runtime carrier
+  # the client fails closed without (atmosphere, entity, HUD, item icons,
+  # localization, physics registry). Output stays under the gitignored .local/.
+  assets:
+    <<: *app
+    command: ["sh", "-ec", "make assets physics-assets"]
+    restart: "no"
+
+  # The client, rendered on a virtual display and published to the browser.
+  client:
+    <<: *app
+    depends_on:
+      assets:
+        condition: service_completed_successfully
+    ports:
+      - "3000:3000"
+    environment:
+      <<: *app-env
+      DISPLAY: ":99"
+      # Software GPU: Mesa llvmpipe via the Vulkan (lavapipe) ICD.
+      WGPU_BACKEND: vulkan
+      LIBGL_ALWAYS_SOFTWARE: "1"
+      GALLIUM_DRIVER: llvmpipe
+    shm_size: "1gb"
+    command: ["sh", "-ec", "exec sh .base44/run-client.sh"]
+    restart: on-failure
+    healthcheck:
+      # The preview is a two-part contract: the browser bridge on 3000 and the
+      # virtual display the client renders into. Report which one is broken.
+      test:
+        - CMD-SHELL
+        - >-
+          status=0;
+          curl -fsS -o /dev/null http://127.0.0.1:3000/vnc.html
+          || { echo 'healthcheck: browser bridge on port 3000 is not serving'; status=1; };
+          xdpyinfo -display :99 >/dev/null 2>&1
+          || { echo 'healthcheck: virtual display :99 is not available'; status=1; };
+          pgrep -f 'x11vnc -display :99' >/dev/null
+          || { echo 'healthcheck: VNC server is not running'; status=1; };
+          pgrep -f 'target/debug/bedrock-client' >/dev/null
+          || { echo 'healthcheck: the bedrock-client process is not running'; status=1; };
+          exit $$status
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      # The first start compiles the Rust workspace before anything listens.
+      start_period: 2700s
+
+  # The Go networking core as a standalone proxy. Optional: the client spawns
+  # this binary itself for direct connections, and the launcher menu needs an
+  # interactive Microsoft device login before an upstream server can be joined.
+  core:
+    <<: *app
+    profiles: ["core"]
+    command:
+      - sh
+      - -ec
+      - >-
+        go build -o target/debug/bedrock-core ./core/cmd/bedrock-core &&
+        exec ./target/debug/bedrock-core
+        -socket-dir "$${SOCKET_DIR:-.local/run}"
+        -upstream "$${UPSTREAM:?set UPSTREAM=host:port (and optionally AUTH_CACHE)}"
+        -auth-cache "$${AUTH_CACHE:-.local/auth/microsoft-token.json}"
+    restart: on-failure
+
+volumes:
+  cinnabar-cargo-registry:
+  cinnabar-target:
+  cinnabar-go:

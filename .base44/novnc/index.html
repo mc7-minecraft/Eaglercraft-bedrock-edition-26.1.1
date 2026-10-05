@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Cinnabar — Bedrock client</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        background: #090b10;
+        overflow: hidden;
+      }
+      #client {
+        border: 0;
+        width: 100%;
+        height: 100%;
+        display: block;
+      }
+    </style>
+  </head>
+  <body>
+    <!--
+      noVNC is the browser half of the preview bridge. Embedding the viewer here
+      (instead of navigating the top-level document) keeps the preview surface
+      stable while the live client view connects.
+    -->
+    <iframe
+      id="client"
+      title="Cinnabar client"
+      src="vnc.html?autoconnect=1&resize=scale&reconnect=1&reconnect_delay=1000"
+      allow="clipboard-read; clipboard-write"
+    ></iframe>
+  </body>
+</html>

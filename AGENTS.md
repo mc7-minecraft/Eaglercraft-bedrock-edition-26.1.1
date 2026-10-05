@@ -140,3 +140,45 @@ thing that discovers whether the code compiles.
 Distinguish pushed work, locally committed work, test-green uncommitted work, and
 work still in progress. Never describe locally committed or merely reviewed work as
 pushed or integrated.
+
+## Base44 dev environment (not obvious from the code)
+
+`docker-compose.base44.yml` is the sandbox/dev runbook. Two things about it are
+deliberate and should not be "simplified":
+
+- Cinnabar is a **native desktop** application, not a web app, so nothing in the
+  repository can be served on port 3000 as-is. The `client` service renders the
+  real client on a virtual X display (`Xvfb :99`, 1280x720) using Mesa's software
+  GPU and bridges that display to the browser with `x11vnc` + `websockify`/noVNC
+  on port 3000. `.base44/run-client.sh` starts the chain; `.base44/novnc/index.html`
+  embeds the noVNC viewer with `autoconnect` so the preview opens on the client.
+- `make assets physics-assets` runs as a one-shot `assets` service before the
+  client, because the client **fails closed** without the compiled carriers.
+
+Facts worth knowing before changing anything here:
+
+- The Rust toolchain is pinned to `1.93.1` by `rust-toolchain.toml`; the image is
+  `rust:1.93` (Debian trixie) with Go copied in from `golang:1.26`, so one image
+  serves the Rust client, the asset pipeline and the Go core.
+- `make assets` downloads Mojang's EULA-gated `bedrock-samples` release
+  (~147 MB) and `make physics-assets` downloads the PMMP/Prismarine inputs. Both
+  write only under the gitignored `.local/`, which is bind-mounted from the repo,
+  so a rebuilt container reuses them instead of re-downloading.
+- Do **not** set `GOFLAGS=-mod=mod`. `tools/registrygen` is used through the
+  `go.work` workspace, and workspace mode rejects `-mod` other than
+  `readonly`/`vendor`; that failure stops `physics-assets` after the carriers
+  compile.
+- The client must be launched with **no arguments** to reach the launcher menu.
+  `--socket-dir` counts as an explicit connection request (see
+  `ClientArgs::connection_requested`), so passing it makes the client try to dial
+  the Go core instead of showing the menu.
+- Software rendering is expected and accepted here: the log shows llvmpipe and
+  Bevy's "software rendering ... very slow" warning. The launcher menu renders at
+  roughly 10-15 FPS, which is enough for a preview.
+- Verify a rendered frame without a viewer:
+  `docker compose -f docker-compose.base44.yml exec -T client sh -c 'import -display :99 -window root /tmp/f.png; identify -format "%wx%h colors=%[colors] mean=%[fx:mean]\n" /tmp/f.png'`.
+  `xwininfo -display :99 -root -tree` confirms the client window and its title
+  (which reports FPS and player position).
+- Joining a real Bedrock server additionally needs the Go core plus an
+  interactive Microsoft device login; that is not part of the preview path and
+  no credential is stored in this environment.
