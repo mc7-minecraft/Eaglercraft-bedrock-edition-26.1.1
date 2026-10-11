@@ -159,9 +159,14 @@ builds.
 - `status` — `.base44/status_server.py` on port 3000, reading job outcome and log
   tail from `.local/base44/`.
 
-Both build jobs are one-shot and log to `.local/base44/<job>.log`. The client
-itself is not launched here: it needs a display, and it fails closed without the
-Mojang-EULA-gated carriers (`make assets`, `make hud-assets`, `make
-physics-assets`), which are not fetched automatically. Restart a job after
-source changes with `docker compose -f docker-compose.base44.yml up -d
---build rust-build`.
+Both build jobs run at container start, log to `.local/base44/<job>.log`, and
+then stay up as development containers (`docker compose exec rust-build bash`).
+Their healthchecks report the toolchain responding and the last verification not
+having failed, so a failed build marks the service unhealthy rather than leaving
+a silently exited container. Re-run after source changes with
+`docker compose -f docker-compose.base44.yml up -d --build rust-build` or
+`docker compose -f docker-compose.base44.yml restart rust-build`.
+
+The client itself is not launched here: it needs a display, and it fails closed
+without the Mojang-EULA-gated carriers (`make assets`, `make hud-assets`, `make
+physics-assets`), which are not fetched automatically.

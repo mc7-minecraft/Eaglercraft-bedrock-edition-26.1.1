@@ -6,9 +6,11 @@
 # (Cargo for Rust, `go` for the core) and serves a live status page on port 3000
 # reporting the real state of those builds.
 #
-# Both application services use plain toolchain images and bind-mount the
-# repository, so edits are picked up by re-running the build job; nothing here
-# bakes source into an image.
+# The two toolchain services use plain base images and bind-mount the repository,
+# so edits are picked up by re-running their build; nothing here bakes source into
+# an image. Each runs its build/verification on startup and then stays up as a
+# development container, so `docker compose exec` can run further cargo/go
+# commands and its healthcheck reports the last verification outcome.
 name: cinnabar
 
 services:
@@ -23,6 +25,7 @@ services:
     environment:
       - CARGO_TERM_COLOR=always
       - BASE44_PREVIEW_MODE
+    restart: on-failure
     command:
       - bash
       - -ec
@@ -32,8 +35,17 @@ services:
         echo running > .local/base44/rust-build.status
         if { rustc --version; cargo --version; cargo fetch --locked && cargo build --locked -p bedrock-client; } 2>&1 | tee .local/base44/rust-build.log
         then echo ok > .local/base44/rust-build.status
-        else echo failed > .local/base44/rust-build.status; exit 1
+        else echo failed > .local/base44/rust-build.status
         fi
+        exec sleep infinity
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - cargo --version >/dev/null 2>&1 && [ "$$(cat .local/base44/rust-build.status 2>/dev/null)" != failed ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
 
   go-core:
     image: golang:1.26
@@ -44,6 +56,7 @@ services:
       - go-build-cache:/root/.cache/go-build
     environment:
       - BASE44_PREVIEW_MODE
+    restart: on-failure
     command:
       - bash
       - -ec
@@ -53,8 +66,17 @@ services:
         echo running > .local/base44/go-core.status
         if { go version; go vet ./core/... && go build -o .local/base44/bin/bedrock-core ./core/cmd/bedrock-core && go test ./core/...; } 2>&1 | tee .local/base44/go-core.log
         then echo ok > .local/base44/go-core.status
-        else echo failed > .local/base44/go-core.status; exit 1
+        else echo failed > .local/base44/go-core.status
         fi
+        exec sleep infinity
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - go version >/dev/null 2>&1 && [ "$$(cat .local/base44/go-core.status 2>/dev/null)" != failed ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
 
   status:
     image: python:3.12-slim
