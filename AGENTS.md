@@ -140,3 +140,28 @@ thing that discovers whether the code compiles.
 Distinguish pushed work, locally committed work, test-green uncommitted work, and
 work still in progress. Never describe locally committed or merely reviewed work as
 pushed or integrated.
+
+## Base44 sandbox environment
+
+`docker-compose.base44.yml` is the sandbox runbook, and it is scaffolding, not
+product. The client is a native windowed application and the core is a local
+socket server, so neither serves HTTP: the stack builds both from this checkout
+and serves a status page on port 3000 that reports the real state of those
+builds.
+
+- `rust-build` — `rust:1.93.1` plus the Linux dev libraries the windowing stack
+  needs, installed by `.base44/rust.Dockerfile` (`libwayland-dev` is the one the
+  README calls out; without it `wayland-sys` fails its build script). Runs
+  `cargo fetch --locked && cargo build --locked -p bedrock-client`.
+- `go-core` — `golang:1.26`, runs `go vet ./core/...`, builds
+  `core/cmd/bedrock-core` to `.local/base44/bin/`, and runs `go test ./core/...`.
+  Do not set `GOFLAGS=-mod=mod`; `go.work` workspace mode rejects it.
+- `status` — `.base44/status_server.py` on port 3000, reading job outcome and log
+  tail from `.local/base44/`.
+
+Both build jobs are one-shot and log to `.local/base44/<job>.log`. The client
+itself is not launched here: it needs a display, and it fails closed without the
+Mojang-EULA-gated carriers (`make assets`, `make hud-assets`, `make
+physics-assets`), which are not fetched automatically. Restart a job after
+source changes with `docker compose -f docker-compose.base44.yml up -d
+--build rust-build`.

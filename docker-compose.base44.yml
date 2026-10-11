@@ -1,0 +1,84 @@
+# Base44 sandbox environment for Cinnabar.
+#
+# Cinnabar is a *native* Bedrock client (Rust/Bevy + a Go networking core), so
+# nothing in this repository can serve the browser preview by itself. This stack
+# therefore builds the product from this checkout with its own toolchains
+# (Cargo for Rust, `go` for the core) and serves a live status page on port 3000
+# reporting the real state of those builds.
+#
+# Both application services use plain toolchain images and bind-mount the
+# repository, so edits are picked up by re-running the build job; nothing here
+# bakes source into an image.
+name: cinnabar
+
+services:
+  rust-build:
+    build:
+      context: .base44
+      dockerfile: rust.Dockerfile
+    working_dir: /workspace
+    volumes:
+      - .:/workspace
+      - cargo-registry:/usr/local/cargo/registry
+    environment:
+      - CARGO_TERM_COLOR=always
+      - BASE44_PREVIEW_MODE
+    command:
+      - bash
+      - -ec
+      - |
+        set -o pipefail
+        mkdir -p .local/base44
+        echo running > .local/base44/rust-build.status
+        if { rustc --version; cargo --version; cargo fetch --locked && cargo build --locked -p bedrock-client; } 2>&1 | tee .local/base44/rust-build.log
+        then echo ok > .local/base44/rust-build.status
+        else echo failed > .local/base44/rust-build.status; exit 1
+        fi
+
+  go-core:
+    image: golang:1.26
+    working_dir: /workspace
+    volumes:
+      - .:/workspace
+      - go-mod:/go/pkg/mod
+      - go-build-cache:/root/.cache/go-build
+    environment:
+      - BASE44_PREVIEW_MODE
+    command:
+      - bash
+      - -ec
+      - |
+        set -o pipefail
+        mkdir -p .local/base44/bin
+        echo running > .local/base44/go-core.status
+        if { go version; go vet ./core/... && go build -o .local/base44/bin/bedrock-core ./core/cmd/bedrock-core && go test ./core/...; } 2>&1 | tee .local/base44/go-core.log
+        then echo ok > .local/base44/go-core.status
+        else echo failed > .local/base44/go-core.status; exit 1
+        fi
+
+  status:
+    image: python:3.12-slim
+    working_dir: /workspace
+    volumes:
+      - .:/workspace
+    ports:
+      - "3000:3000"
+    environment:
+      - BASE44_PREVIEW_MODE
+    command: ["python3", "-u", ".base44/status_server.py"]
+    restart: on-failure
+    healthcheck:
+      test:
+        - CMD
+        - python3
+        - -c
+        - import urllib.request;urllib.request.urlopen('http://127.0.0.1:3000/', timeout=3).read()
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+volumes:
+  cargo-registry:
+  go-mod:
+  go-build-cache:
